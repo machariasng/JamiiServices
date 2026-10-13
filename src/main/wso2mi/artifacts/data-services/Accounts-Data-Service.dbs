@@ -1,0 +1,32 @@
+<data name="Accounts-Data-Service" serviceNamespace="" serviceGroup="" transports="http https" disableStreaming="true">
+    <description/>
+    <config id="Accounts-Data-Source">
+        <property name="driverClassName">org.sqlite.JDBC</property>
+        <property name="url">jdbc:sqlite:D:/Accounts-Family-Bank</property>
+        <property name="username">sa</property>
+        <property name="password">sa</property>
+    </config>
+    <query id="getAccountQuery" useConfig="Accounts-Data-Source">
+        <sql>SELECT account_number, status, balance, currency, request_id, timestamp
+            FROM account WHERE account_number = ?</sql>
+        <param name="accountNumber" sqlType="STRING"/>
+        <result element="Accounts" rowName="Account">
+            <element column="account_number" name="accountNumber" xsdType="string"/>
+            <element column="status" name="accountStatus" xsdType="string"/>
+            <element column="balance" name="accountBalance" xsdType="integer"/>
+            <element column="currency" name="accountCurrency" xsdType="string"/>
+            <element column="request_id" name="requestId" xsdType="string"/>
+            <element column="timestamp" name="timestamp" xsdType="string"/>
+        </result>
+    </query>
+    <resource method="GET" path="accountsds/{accountNumber}" disableStreaming="true">
+        <call-query href="getAccountQuery">
+            <with-param name="accountNumber" query-param="accountNumber"/>
+        </call-query>
+    </resource>
+    <operation name="getAccountBalance">
+        <call-query href="getAccountQuery">
+            <with-param name="accountNumber" query-param="accountNumber"/>
+        </call-query>
+    </operation>
+</data>

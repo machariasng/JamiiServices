@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<api context="/apis" name="apis" xmlns="http://ws.apache.org/ns/synapse">
+    <resource methods="GET" uri-template="/customers/{customerId}">
+        <inSequence>
+            <log category="INFO" logMessageID="false" logFullPayload="false">
+                <message>&quot;Customer inquiry received.&quot;</message>
+            </log>
+            <payloadFactory media-type="json" template-type="default">
+                <format>{
+                    "accountNumber": "string",
+                    "status": "ACTIVE | DORMANT | CLOSED",
+                    "balance": { "amount": 0.00, "currency": "KES" },
+                    "requestId": "uuid",
+                    "timestamp": "ISO-8601"
+                    }</format>
+            </payloadFactory>
+            <respond/>
+        </inSequence>
+        <faultSequence>
+        </faultSequence>
+    </resource>
+    <resource methods="GET" uri-template="/accounts/{accountNumber}/balance">
+        <inSequence>
+            <!-- Unique request ID (UUID) -->
+            <property name="requestId" scope="default" type="STRING" expression="substring-after(get-property('MessageID'), 'urn:uuid:')"/>
+            <!-- ISO-8601 timestamp, e.g. 2026-10-13T17:26:31+03:00 -->
+            <property name="requestTimestamp" scope="default" type="STRING" expression="concat(get-property('SYSTEM_DATE','yyyy-MM-dd'), 'T', get-property('SYSTEM_DATE','HH:mm:ss'), get-property('SYSTEM_DATE','XXX'))"/>
+            <log category="INFO" logMessageID="false" logFullPayload="false">
+                <message>&quot;Balance inquiry received.&quot;</message>
+            </log>
+            <dataServiceCall serviceName="Accounts-Data-Service">
+                <operations type="single">
+                    <operation name="getAccountBalance">
+                        <param name="accountNumber" expression="$ctx:uri.var.accountNumber" evaluator="xml"/>
+                    </operation>
+                </operations>
+                <source type="inline"/>
+                <target type="body"/>
+            </dataServiceCall>
+            <filter xpath="not($body//*[local-name()='Account'])">
+                <then>
+                    <payloadFactory media-type="json">
+                        <format>{"error":"Account not found","requestId":"$1"}</format>
+                        <args>
+                            <arg evaluator="xml" expression="$ctx:requestId"/>
+                        </args>
+                    </payloadFactory>
+                    <property name="HTTP_SC" value="404" scope="axis2"/>
+                    <respond/>
+                </then>
+                <else/>
+            </filter>
+            <payloadFactory media-type="json" template-type="default">
+                <format>{
+                    "accountNumber": "$1",
+                    "status": "$2",
+                    "balance": {
+                    "amount": $3,
+                    "currency": "$4"
+                    },
+                    "requestId": "$5",
+                    "timestamp": "$6"
+                    }</format>
+                <args>
+                    <arg evaluator="xml" expression="$body//*[local-name()='accountNumber']"/>
+                    <arg evaluator="xml" expression="$body//*[local-name()='accountStatus']"/>
+                    <arg evaluator="xml" expression="$body//*[local-name()='accountBalance']"/>
+                    <arg evaluator="xml" expression="$body//*[local-name()='accountCurrency']"/>
+                    <arg evaluator="xml" expression="$ctx:requestId"/>
+                    <arg evaluator="xml" expression="$ctx:requestTimestamp"/>
+                </args>
+            </payloadFactory>
+            <property name="messageType" value="application/json" scope="axis2"/>
+            <respond/>
+        </inSequence>
+        <faultSequence>
+            <!-- 1. Log the real error for you (stays on the server) -->
+            <log level="custom">
+                <property name="Balance lookup failed" expression="$ctx:ERROR_MESSAGE"/>
+                <property name="Error code" expression="$ctx:ERROR_CODE"/>
+            </log>
+            <!-- 2. Send a safe, generic message to the caller -->
+            <payloadFactory media-type="json">
+                <format>{"error":"Unable to retrieve account details at this time. Please try again later.","requestId":"$1"}</format>
+                <args>
+                    <arg evaluator="xml" expression="$ctx:requestId"/>
+                </args>
+            </payloadFactory>
+            <!-- 3. Set the status code and content type -->
+            <property name="HTTP_SC" value="500" scope="axis2"/>
+            <property name="messageType" value="application/json" scope="axis2"/>
+            <!-- 4. Return it -->
+            <respond/>
+        </faultSequence>
+    </resource>
+    <resource methods="POST" uri-template="/loans/eligibility">
+        <inSequence>
+            <log category="INFO" logMessageID="false" logFullPayload="false">
+                <message>&quot;Loan inquiry received.&quot;</message>
+            </log>
+            <payloadFactory media-type="json" template-type="default">
+                <format>{
+                    "accountNumber": "string",
+                    "status": "ACTIVE | DORMANT | CLOSED",
+                    "balance": { "amount": 0.00, "currency": "KES" },
+                    "requestId": "uuid",
+                    "timestamp": "ISO-8601"
+                    }</format>
+            </payloadFactory>
+            <respond/>
+        </inSequence>
+        <faultSequence>
+        </faultSequence>
+    </resource>
+</api>

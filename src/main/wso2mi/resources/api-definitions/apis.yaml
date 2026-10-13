@@ -1,0 +1,51 @@
+openapi: 3.0.1
+info:
+  title: apis
+  description: API Definition of apis
+  version: 1.0.0
+servers:
+  - url: http://localhost:8290/apis
+  - url: https://localhost:8253/apis
+paths:
+  /customers/{customerId}:
+    get:
+      responses:
+        default:
+          description: Default response
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: string
+  /accounts/{accountNumber}/balance:
+    get:
+      responses:
+        default:
+          description: Default response
+      parameters:
+        - name: accountNumber
+          in: path
+          required: true
+          schema:
+            type: string
+  /loans/eligibility:
+    post:
+      requestBody:
+        description: Sample Payload
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payload:
+                  type: object
+          application/xml:
+            schema:
+              type: object
+              xml:
+                name: payload
+        required: false
+      responses:
+        default:
+          description: Default response
