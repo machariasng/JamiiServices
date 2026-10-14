@@ -1,0 +1,480 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "JamiiServices API",
+    "description": "Accounts, customers and loan eligibility APIs exposed by WSO2 Micro Integrator.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8290/apis",
+      "description": "Local MI (HTTP)"
+    },
+    {
+      "url": "https://localhost:8253/apis",
+      "description": "Local MI (HTTPS)"
+    }
+  ],
+  "paths": {
+    "/customers/{customerId}": {
+      "get": {
+        "summary": "Get customer by ID",
+        "description": "Proxies to the backend customer REST API and returns the customer record.",
+        "operationId": "getCustomer",
+        "parameters": [
+          {
+            "name": "customerId",
+            "in": "path",
+            "required": true,
+            "description": "Numeric customer identifier.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$",
+              "example": "1"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer found.",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Customer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/BackendUnavailable"
+          },
+          "504": {
+            "$ref": "#/components/responses/BackendTimeout"
+          }
+        }
+      }
+    },
+    "/accounts/{accountNumber}/balance": {
+      "get": {
+        "summary": "Get account balance",
+        "description": "Reads the account balance from the Accounts data service (SQLite).",
+        "operationId": "getAccountBalance",
+        "parameters": [
+          {
+            "name": "accountNumber",
+            "in": "path",
+            "required": true,
+            "description": "Account number.",
+            "schema": {
+              "type": "string",
+              "example": "1122334455"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance returned.",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BalanceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/BackendUnavailable"
+          }
+        }
+      }
+    },
+    "/loans/eligibility": {
+      "post": {
+        "summary": "Check loan eligibility",
+        "description": "Accepts a JSON request, calls the backend SOAP service and returns a clean JSON result. Raw SOAP faults are never exposed.",
+        "operationId": "checkLoanEligibility",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Eligibility request payload.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoanEligibilityRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Eligibility result.",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoanEligibilityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "503": {
+            "$ref": "#/components/responses/BackendUnavailable"
+          },
+          "504": {
+            "$ref": "#/components/responses/BackendTimeout"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "CorrelationId": {
+        "name": "X-Correlation-ID",
+        "in": "header",
+        "required": false,
+        "description": "Optional. If omitted, the API generates one and returns it in the response.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "headers": {
+      "CorrelationId": {
+        "description": "Correlation ID echoed or generated by the API.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "schemas": {
+      "BalanceResponse": {
+        "type": "object",
+        "required": [
+          "accountNumber",
+          "status",
+          "balance",
+          "requestId",
+          "timestamp"
+        ],
+        "properties": {
+          "accountNumber": {
+            "type": "string",
+            "example": "1122334455"
+          },
+          "status": {
+            "type": "string",
+            "example": "ACTIVE"
+          },
+          "balance": {
+            "type": "object",
+            "required": [
+              "amount",
+              "currency"
+            ],
+            "properties": {
+              "amount": {
+                "type": "number",
+                "format": "double",
+                "example": 125075
+              },
+              "currency": {
+                "type": "string",
+                "example": "KES"
+              }
+            }
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "13917f6b-7c62-4c3c-85d2-97faba5cea58"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-10-15T01:01:28.689+03:00"
+          }
+        }
+      },
+      "Customer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "Leanne Graham"
+          },
+          "username": {
+            "type": "string",
+            "example": "Bret"
+          },
+          "email": {
+            "type": "string",
+            "example": "Sincere@april.biz"
+          },
+          "address": {
+            "type": "object",
+            "properties": {
+              "street": {
+                "type": "string"
+              },
+              "suite": {
+                "type": "string"
+              },
+              "city": {
+                "type": "string"
+              },
+              "zipcode": {
+                "type": "string"
+              },
+              "geo": {
+                "type": "object",
+                "properties": {
+                  "lat": {
+                    "type": "string"
+                  },
+                  "lng": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "phone": {
+            "type": "string"
+          },
+          "website": {
+            "type": "string"
+          },
+          "company": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "catchPhrase": {
+                "type": "string"
+              },
+              "bs": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "LoanEligibilityRequest": {
+        "type": "object",
+        "required": [
+          "customerId",
+          "monthlyIncome",
+          "requestedAmount",
+          "termMonths"
+        ],
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "example": "CUST-100245"
+          },
+          "monthlyIncome": {
+            "type": "number",
+            "description": "Applicant's gross monthly income.",
+            "example": 85000
+          },
+          "requestedAmount": {
+            "type": "number",
+            "description": "Loan amount requested.",
+            "example": 250000
+          },
+          "termMonths": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Loan term in months.",
+            "example": 12
+          }
+        }
+      },
+      "LoanEligibilityResponse": {
+        "type": "object",
+        "required": [
+          "customerId",
+          "eligible",
+          "requestedAmount",
+          "termMonths",
+          "estimatedMonthlyInstallment",
+          "reason",
+          "requestId",
+          "timestamp"
+        ],
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "example": "CUST-100245"
+          },
+          "eligible": {
+            "type": "boolean",
+            "example": true
+          },
+          "requestedAmount": {
+            "type": "number",
+            "example": 250000
+          },
+          "termMonths": {
+            "type": "integer",
+            "example": 12
+          },
+          "estimatedMonthlyInstallment": {
+            "type": "object",
+            "required": [
+              "amount",
+              "currency"
+            ],
+            "properties": {
+              "amount": {
+                "type": "number",
+                "example": 20833
+              },
+              "currency": {
+                "type": "string",
+                "example": "KES"
+              }
+            }
+          },
+          "reason": {
+            "type": "string",
+            "example": "Estimated installment is within 40% of monthly income."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "41b9586f-e5e8-4248-85e4-d5c4defd8795"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-10-15T01:10:12.629+03:00"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "Single error shape used for DB, HTTP and SOAP backend failures.",
+        "required": [
+          "code",
+          "message",
+          "requestId",
+          "timestamp"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "INVALID_REQUEST"
+          },
+          "message": {
+            "type": "string",
+            "example": "accountNumber must be numeric"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Malformed or invalid input.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "code": "INVALID_REQUEST",
+              "message": "accountNumber must be numeric",
+              "requestId": "3f2b8c1e-5a47-4d0e-9b6a-1c2d3e4f5a6b",
+              "timestamp": "2026-10-15T10:30:00Z"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "BackendUnavailable": {
+        "description": "Backend unavailable (fault sequence).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "BackendTimeout": {
+        "description": "Backend call timed out.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    }
+  }
+}
