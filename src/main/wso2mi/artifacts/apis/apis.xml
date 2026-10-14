@@ -4,7 +4,7 @@
         <inSequence>
             <!-- context: ids used by every log line and error body -->
             <property name="requestId" expression="fn:substring-after(get-property('MessageID'),'urn:uuid:')" scope="default" type="STRING"/>
-            <property name="timestamp" expression="get-property('SYSTEM_DATE','yyyy-MM-dd&apos;T&apos;HH:mm:ss.SSSXXX')" scope="default" type="STRING"/>
+            <property name="timestamp" expression="get-property(&quot;SYSTEM_DATE&quot;, &quot;yyyy-MM-dd'T'HH:mm:ss.SSSXXX&quot;)" scope="default" type="STRING"/>
             <!-- keep caller's correlation id, otherwise create one -->
             <filter xpath="string-length(get-property('transport','X-Correlation-ID')) = 0">
                 <then>
@@ -20,7 +20,7 @@
                 <property name="correlationId" expression="get-property('correlationId')"/>
                 <property name="customer" expression="get-property('maskedCustomer')"/>
             </log>
-            <filter source="get-property('uri.var.customerId')" regex="^[0-9]{1,10}$">
+            <filter source="get-property('uri.var.customerId')" regex="^[0-9]{1,8}$">
                 <then>
                     <!-- outbound header manipulation -->
                     <header name="X-Correlation-ID" expression="get-property('correlationId')" scope="transport"/>
@@ -84,7 +84,7 @@
         <inSequence>
             <!-- context: ids used by every log line and error body -->
             <property name="requestId" expression="fn:substring-after(get-property('MessageID'),'urn:uuid:')" scope="default" type="STRING"/>
-            <property name="timestamp" expression="get-property('SYSTEM_DATE','yyyy-MM-dd&apos;T&apos;HH:mm:ss.SSSXXX')" scope="default" type="STRING"/>
+            <property name="timestamp" expression="get-property(&quot;SYSTEM_DATE&quot;, &quot;yyyy-MM-dd'T'HH:mm:ss.SSSXXX&quot;)" scope="default" type="STRING"/>
             <!-- keep caller's correlation id, otherwise create one -->
             <filter xpath="string-length(get-property('transport','X-Correlation-ID')) = 0">
                 <then>
@@ -103,7 +103,7 @@
                 <property name="account" expression="get-property('maskedAccount')"/>
             </log>
             <!-- 400 for malformed input, before touching the DB -->
-            <filter source="get-property('uri.var.accountNumber')" regex="^[0-9]{8,10}$">
+            <filter source="get-property('uri.var.accountNumber')" regex="^[0-9]{10,16}$">
                 <then>
                     <log level="custom">
                         <property name="LOG" value="BACKEND_CALL Accounts-Data-Service getAccountBalance"/>
@@ -162,7 +162,7 @@
     <resource methods="POST" uri-template="/loans/eligibility">
         <inSequence>
             <property name="requestId" expression="fn:substring-after(get-property('MessageID'),'urn:uuid:')" scope="default" type="STRING"/>
-            <property name="timestamp" expression="fn:concat(get-property('SYSTEM_DATE','yyyy-MM-dd'),'T',get-property('SYSTEM_DATE','HH:mm:ss.SSSXXX'))" scope="default" type="STRING"/>
+            <property name="timestamp" expression="get-property(&quot;SYSTEM_DATE&quot;, &quot;yyyy-MM-dd'T'HH:mm:ss.SSSXXX&quot;)" scope="default" type="STRING"/>
             <filter xpath="string-length(get-property('transport','X-Correlation-ID')) = 0">
                 <then>
                     <property name="correlationId" expression="get-property('requestId')" scope="default" type="STRING"/>
@@ -206,6 +206,7 @@
                         <property name="correlationId" expression="get-property('correlationId')"/>
                         <property name="customer" expression="get-property('maskedCustomer')"/>
                     </log>
+                    <header name="Accept-Encoding" action="remove" scope="transport"/>
                     <call>
                         <endpoint key="LoanSoapEP"/>
                     </call>
