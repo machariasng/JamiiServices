@@ -2,112 +2,270 @@
 <api context="/apis" name="apis" xmlns="http://ws.apache.org/ns/synapse">
     <resource methods="GET" uri-template="/customers/{customerId}">
         <inSequence>
-            <log category="INFO" logMessageID="false" logFullPayload="false">
-                <message>&quot;Customer inquiry received.&quot;</message>
+            <!-- context: ids used by every log line and error body -->
+            <property name="requestId" expression="fn:substring-after(get-property('MessageID'),'urn:uuid:')" scope="default" type="STRING"/>
+            <property name="timestamp" expression="get-property('SYSTEM_DATE','yyyy-MM-dd&apos;T&apos;HH:mm:ss.SSSXXX')" scope="default" type="STRING"/>
+            <!-- keep caller's correlation id, otherwise create one -->
+            <filter xpath="string-length(get-property('transport','X-Correlation-ID')) = 0">
+                <then>
+                    <property name="correlationId" expression="get-property('requestId')" scope="default" type="STRING"/>
+                </then>
+                <else>
+                    <property name="correlationId" expression="get-property('transport','X-Correlation-ID')" scope="default" type="STRING"/>
+                </else>
+            </filter>
+            <property name="maskedCustomer" expression="fn:concat('****', fn:substring(get-property('uri.var.customerId'), fn:string-length(get-property('uri.var.customerId'))))" scope="default" type="STRING"/>
+            <log level="custom">
+                <property name="LOG" value="REQUEST_IN GET /customers/{customerId}"/>
+                <property name="correlationId" expression="get-property('correlationId')"/>
+                <property name="customer" expression="get-property('maskedCustomer')"/>
             </log>
-            <payloadFactory media-type="json" template-type="default">
-                <format>{
-                    "accountNumber": "string",
-                    "status": "ACTIVE | DORMANT | CLOSED",
-                    "balance": { "amount": 0.00, "currency": "KES" },
-                    "requestId": "uuid",
-                    "timestamp": "ISO-8601"
-                    }</format>
-            </payloadFactory>
+            <filter source="get-property('uri.var.customerId')" regex="^[0-9]{1,10}$">
+                <then>
+                    <!-- outbound header manipulation -->
+                    <header name="X-Correlation-ID" expression="get-property('correlationId')" scope="transport"/>
+                    <header name="Authorization" action="remove" scope="transport"/>
+                    <header name="Cookie" action="remove" scope="transport"/>
+                    <header name="X-Internal-Trace" action="remove" scope="transport"/>
+                    <log level="custom">
+                        <property name="LOG" value="BACKEND_CALL jsonplaceholder /users"/>
+                        <property name="correlationId" expression="get-property('correlationId')"/>
+                        <property name="customer" expression="get-property('maskedCustomer')"/>
+                    </log>
+                    <call>
+                        <endpoint key="CustomerBackendEP"/>
+                    </call>
+                    <!-- strip backend/internal headers from the response -->
+                    <header name="Server" action="remove" scope="transport"/>
+                    <header name="X-Powered-By" action="remove" scope="transport"/>
+                    <header name="Via" action="remove" scope="transport"/>
+                    <header name="Set-Cookie" action="remove" scope="transport"/>
+                    <header name="X-Internal-Trace" action="remove" scope="transport"/>
+                    <header name="X-Correlation-ID" expression="get-property('correlationId')" scope="transport"/>
+                    <filter source="get-property('axis2','HTTP_SC')" regex="200">
+                        <then>
+                            <log level="custom">
+                                <property name="LOG" value="RESPONSE_OUT 200"/>
+                                <property name="correlationId" expression="get-property('correlationId')"/>
+                                <property name="customer" expression="get-property('maskedCustomer')"/>
+                            </log>
+                            <respond/>
+                        </then>
+                        <else>
+                            <filter source="get-property('axis2','HTTP_SC')" regex="404">
+                                <then>
+                                    <property name="ERR_HTTP" value="404" scope="default" type="STRING"/>
+                                    <property name="ERR_CODE" value="CUSTOMER_NOT_FOUND" scope="default" type="STRING"/>
+                                    <property name="ERR_MSG" value="No customer found for the supplied customerId." scope="default" type="STRING"/>
+                                </then>
+                                <else>
+                                    <property name="ERR_HTTP" value="502" scope="default" type="STRING"/>
+                                    <property name="ERR_CODE" value="BACKEND_ERROR" scope="default" type="STRING"/>
+                                    <property name="ERR_MSG" value="The customer service returned an unexpected response." scope="default" type="STRING"/>
+                                </else>
+                            </filter>
+                            <sequence key="ErrorResponseSeq"/>
+                        </else>
+                    </filter>
+                </then>
+                <else>
+                    <property name="ERR_HTTP" value="400" scope="default" type="STRING"/>
+                    <property name="ERR_CODE" value="INVALID_REQUEST" scope="default" type="STRING"/>
+                    <property name="ERR_MSG" value="customerId must be numeric (max 10 digits)." scope="default" type="STRING"/>
+                    <sequence key="ErrorResponseSeq"/>
+                </else>
+            </filter>
             <respond/>
         </inSequence>
         <faultSequence>
         </faultSequence>
     </resource>
-    <resource methods="GET" uri-template="/accounts/{accountNumber}/balance">
+    <resource methods="GET" uri-template="/accounts/{accountNumber}/balance" faultSequence="AccountFaultSeq">
         <inSequence>
-            <!-- Unique request ID (UUID) -->
-            <property name="requestId" scope="default" type="STRING" expression="substring-after(get-property('MessageID'), 'urn:uuid:')"/>
-            <!-- ISO-8601 timestamp, e.g. 2026-10-13T17:26:31+03:00 -->
-            <property name="requestTimestamp" scope="default" type="STRING" expression="concat(get-property('SYSTEM_DATE','yyyy-MM-dd'), 'T', get-property('SYSTEM_DATE','HH:mm:ss'), get-property('SYSTEM_DATE','XXX'))"/>
-            <log category="INFO" logMessageID="false" logFullPayload="false">
-                <message>&quot;Balance inquiry received.&quot;</message>
-            </log>
-            <dataServiceCall serviceName="Accounts-Data-Service">
-                <operations type="single">
-                    <operation name="getAccountBalance">
-                        <param name="accountNumber" expression="$ctx:uri.var.accountNumber" evaluator="xml"/>
-                    </operation>
-                </operations>
-                <source type="inline"/>
-                <target type="body"/>
-            </dataServiceCall>
-            <filter xpath="not($body//*[local-name()='Account'])">
+            <!-- context: ids used by every log line and error body -->
+            <property name="requestId" expression="fn:substring-after(get-property('MessageID'),'urn:uuid:')" scope="default" type="STRING"/>
+            <property name="timestamp" expression="get-property('SYSTEM_DATE','yyyy-MM-dd&apos;T&apos;HH:mm:ss.SSSXXX')" scope="default" type="STRING"/>
+            <!-- keep caller's correlation id, otherwise create one -->
+            <filter xpath="string-length(get-property('transport','X-Correlation-ID')) = 0">
                 <then>
-                    <payloadFactory media-type="json">
-                        <format>{"error":"Account not found","requestId":"$1"}</format>
-                        <args>
-                            <arg evaluator="xml" expression="$ctx:requestId"/>
-                        </args>
-                    </payloadFactory>
-                    <property name="HTTP_SC" value="404" scope="axis2"/>
-                    <respond/>
+                    <property name="correlationId" expression="get-property('requestId')" scope="default" type="STRING"/>
                 </then>
-                <else/>
+                <else>
+                    <property name="correlationId" expression="get-property('transport','X-Correlation-ID')" scope="default" type="STRING"/>
+                </else>
             </filter>
-            <payloadFactory media-type="json" template-type="default">
-                <format>{
-                    "accountNumber": "$1",
-                    "status": "$2",
-                    "balance": {
-                    "amount": $3,
-                    "currency": "$4"
-                    },
-                    "requestId": "$5",
-                    "timestamp": "$6"
-                    }</format>
-                <args>
-                    <arg evaluator="xml" expression="$body//*[local-name()='accountNumber']"/>
-                    <arg evaluator="xml" expression="$body//*[local-name()='accountStatus']"/>
-                    <arg evaluator="xml" expression="$body//*[local-name()='accountBalance']"/>
-                    <arg evaluator="xml" expression="$body//*[local-name()='accountCurrency']"/>
-                    <arg evaluator="xml" expression="$ctx:requestId"/>
-                    <arg evaluator="xml" expression="$ctx:requestTimestamp"/>
-                </args>
-            </payloadFactory>
-            <property name="messageType" value="application/json" scope="axis2"/>
-            <respond/>
-        </inSequence>
-        <faultSequence>
-            <!-- 1. Log the real error for you (stays on the server) -->
+            <header name="X-Internal-Trace" action="remove" scope="transport"/>
+            <!-- masking: last four digits only -->
+            <property name="maskedAccount" scope="default" type="STRING" expression="concat('****', substring(get-property('uri.var.accountNumber'), string-length(get-property('uri.var.accountNumber')) - 3))"/>
             <log level="custom">
-                <property name="Balance lookup failed" expression="$ctx:ERROR_MESSAGE"/>
-                <property name="Error code" expression="$ctx:ERROR_CODE"/>
+                <property name="LOG" value="REQUEST_IN GET /accounts/{accountNumber}/balance"/>
+                <property name="correlationId" expression="get-property('correlationId')"/>
+                <property name="account" expression="get-property('maskedAccount')"/>
             </log>
-            <!-- 2. Send a safe, generic message to the caller -->
-            <payloadFactory media-type="json">
-                <format>{"error":"Unable to retrieve account details at this time. Please try again later.","requestId":"$1"}</format>
-                <args>
-                    <arg evaluator="xml" expression="$ctx:requestId"/>
-                </args>
-            </payloadFactory>
-            <!-- 3. Set the status code and content type -->
-            <property name="HTTP_SC" value="500" scope="axis2"/>
-            <property name="messageType" value="application/json" scope="axis2"/>
-            <!-- 4. Return it -->
-            <respond/>
-        </faultSequence>
+            <!-- 400 for malformed input, before touching the DB -->
+            <filter source="get-property('uri.var.accountNumber')" regex="^[0-9]{8,10}$">
+                <then>
+                    <log level="custom">
+                        <property name="LOG" value="BACKEND_CALL Accounts-Data-Service getAccountBalance"/>
+                        <property name="correlationId" expression="get-property('correlationId')"/>
+                        <property name="account" expression="get-property('maskedAccount')"/>
+                    </log>
+                    <dataServiceCall serviceName="Accounts-Data-Service">
+                        <operations type="single">
+                            <operation name="getAccountBalance">
+                                <param name="accountNumber" expression="$ctx:uri.var.accountNumber" evaluator="xml"/>
+                            </operation>
+                        </operations>
+                        <source type="inline"/>
+                        <target type="body"/>
+                    </dataServiceCall>
+                    <filter xpath="not($body//*[local-name()='Account'])">
+                        <then>
+                            <property name="ERR_HTTP" value="404" scope="default" type="STRING"/>
+                            <property name="ERR_CODE" value="ACCOUNT_NOT_FOUND" scope="default" type="STRING"/>
+                            <property name="ERR_MSG" value="No account found for the supplied account number." scope="default" type="STRING"/>
+                            <sequence key="ErrorResponseSeq"/>
+                        </then>
+                        <else>
+                            <payloadFactory media-type="json" template-type="default">
+                                <format>{"accountNumber": "$1", "status": "$2", "balance": {"amount": $3, "currency": "$4"}, "requestId": "$5", "timestamp": "$6"}</format>
+                                <args>
+                                    <arg evaluator="xml" expression="$body//*[local-name()='accountNumber']"/>
+                                    <arg evaluator="xml" expression="$body//*[local-name()='accountStatus']"/>
+                                    <arg evaluator="xml" expression="$body//*[local-name()='accountBalance']"/>
+                                    <arg evaluator="xml" expression="$body//*[local-name()='accountCurrency']"/>
+                                    <arg evaluator="xml" expression="$ctx:requestId"/>
+                                    <arg evaluator="xml" expression="$ctx:timestamp"/>
+                                </args>
+                            </payloadFactory>
+                            <property name="HTTP_SC" value="200" scope="axis2"/>
+                            <property name="messageType" value="application/json" scope="axis2"/>
+                            <header name="X-Correlation-ID" expression="get-property('correlationId')" scope="transport"/>
+                            <log level="custom">
+                                <property name="LOG" value="RESPONSE_OUT 200"/>
+                                <property name="correlationId" expression="get-property('correlationId')"/>
+                                <property name="account" expression="get-property('maskedAccount')"/>
+                            </log>
+                            <respond/>
+                        </else>
+                    </filter>
+                </then>
+                <else>
+                    <property name="ERR_HTTP" value="400" scope="default" type="STRING"/>
+                    <property name="ERR_CODE" value="INVALID_REQUEST" scope="default" type="STRING"/>
+                    <property name="ERR_MSG" value="accountNumber must be 10 to 16 digits." scope="default" type="STRING"/>
+                    <sequence key="ErrorResponseSeq"/>
+                </else>
+            </filter>
+        </inSequence>
     </resource>
     <resource methods="POST" uri-template="/loans/eligibility">
         <inSequence>
-            <log category="INFO" logMessageID="false" logFullPayload="false">
-                <message>&quot;Loan inquiry received.&quot;</message>
+            <property name="requestId" expression="fn:substring-after(get-property('MessageID'),'urn:uuid:')" scope="default" type="STRING"/>
+            <property name="timestamp" expression="fn:concat(get-property('SYSTEM_DATE','yyyy-MM-dd'),'T',get-property('SYSTEM_DATE','HH:mm:ss.SSSXXX'))" scope="default" type="STRING"/>
+            <filter xpath="string-length(get-property('transport','X-Correlation-ID')) = 0">
+                <then>
+                    <property name="correlationId" expression="get-property('requestId')" scope="default" type="STRING"/>
+                </then>
+                <else>
+                    <property name="correlationId" expression="get-property('transport','X-Correlation-ID')" scope="default" type="STRING"/>
+                </else>
+            </filter>
+            <property name="stage" value="INPUT" scope="default" type="STRING"/>
+            <property name="customerId" expression="json-eval($.customerId)" scope="default" type="STRING"/>
+            <property name="monthlyIncome" expression="json-eval($.monthlyIncome)" scope="default" type="STRING"/>
+            <property name="requestedAmount" expression="json-eval($.requestedAmount)" scope="default" type="STRING"/>
+            <property name="termMonths" expression="json-eval($.termMonths)" scope="default" type="STRING"/>
+            <property name="maskedCustomer" expression="fn:concat('****', fn:substring(get-property('customerId'), fn:string-length(get-property('customerId'))))" scope="default" type="STRING"/>
+            <log level="custom">
+                <property name="LOG" value="REQUEST_IN POST /loans/eligibility"/>
+                <property name="correlationId" expression="get-property('correlationId')"/>
+                <property name="customer" expression="get-property('maskedCustomer')"/>
             </log>
-            <payloadFactory media-type="json" template-type="default">
-                <format>{
-                    "accountNumber": "string",
-                    "status": "ACTIVE | DORMANT | CLOSED",
-                    "balance": { "amount": 0.00, "currency": "KES" },
-                    "requestId": "uuid",
-                    "timestamp": "ISO-8601"
-                    }</format>
-            </payloadFactory>
-            <respond/>
+            <!-- customerId: 1-32 safe chars; the other three: positive whole numbers (max 9 digits) -->
+            <filter source="fn:concat(get-property('customerId'),'|',get-property('monthlyIncome'),'|',get-property('requestedAmount'),'|',get-property('termMonths'))" regex="^[A-Za-z0-9_-]{1,32}\|[1-9][0-9]{0,8}\|[1-9][0-9]{0,8}\|[1-9][0-9]{0,8}$">
+                <then>
+                    <property name="stage" value="BACKEND" scope="default" type="STRING"/>
+                    <!-- REST/JSON in, SOAP 1.1 out -->
+                    <property name="messageType" value="text/xml" scope="axis2"/>
+                    <payloadFactory media-type="xml">
+                        <format>
+                            <Divide xmlns="http://tempuri.org/">
+                                <intA>$1</intA>
+                                <intB>$2</intB>
+                            </Divide>
+                        </format>
+                        <args>
+                            <arg evaluator="xml" expression="get-property('requestedAmount')"/>
+                            <arg evaluator="xml" expression="get-property('termMonths')"/>
+                        </args>
+                    </payloadFactory>
+                    <header name="Action" value="http://tempuri.org/Divide" scope="default"/>
+                    <log level="custom">
+                        <property name="LOG" value="BACKEND_CALL soap Divide"/>
+                        <property name="correlationId" expression="get-property('correlationId')"/>
+                        <property name="customer" expression="get-property('maskedCustomer')"/>
+                    </log>
+                    <call>
+                        <endpoint key="LoanSoapEP"/>
+                    </call>
+                    <filter xpath="boolean(//*[local-name()='Fault'])">
+                        <then>
+                            <!-- SOAP Fault: detail goes to the log only, never to the client -->
+                            <log level="custom">
+                                <property name="LOG" value="SOAP_FAULT"/>
+                                <property name="correlationId" expression="get-property('correlationId')"/>
+                                <property name="faultstring" expression="//*[local-name()='faultstring']"/>
+                            </log>
+                            <property name="ERR_HTTP" value="502" scope="default" type="STRING"/>
+                            <property name="ERR_CODE" value="UPSTREAM_SERVICE_ERROR" scope="default" type="STRING"/>
+                            <property name="ERR_MSG" value="The eligibility check could not be completed." scope="default" type="STRING"/>
+                            <sequence key="ErrorResponseSeq"/>
+                        </then>
+                        <else>
+                            <property name="installment" expression="//*[local-name()='DivideResult']" scope="default" type="STRING"/>
+                            <filter xpath="number(get-property('installment')) * 100 &lt;= number(get-property('monthlyIncome')) * 40">
+                                <then>
+                                    <property name="eligible" value="true" scope="default" type="STRING"/>
+                                    <property name="reason" value="Estimated installment is within 40% of monthly income." scope="default" type="STRING"/>
+                                </then>
+                                <else>
+                                    <property name="eligible" value="false" scope="default" type="STRING"/>
+                                    <property name="reason" value="Estimated installment exceeds 40% of monthly income." scope="default" type="STRING"/>
+                                </else>
+                            </filter>
+                            <payloadFactory media-type="json">
+                                <format>{"customerId":"$1","eligible":$2,"requestedAmount":$3,"termMonths":$4,"estimatedMonthlyInstallment":{"amount":$5,"currency":"KES"},"reason":"$6","requestId":"$7","timestamp":"$8"}</format>
+                                <args>
+                                    <arg evaluator="xml" expression="get-property('customerId')"/>
+                                    <arg evaluator="xml" expression="get-property('eligible')"/>
+                                    <arg evaluator="xml" expression="get-property('requestedAmount')"/>
+                                    <arg evaluator="xml" expression="get-property('termMonths')"/>
+                                    <arg evaluator="xml" expression="get-property('installment')"/>
+                                    <arg evaluator="xml" expression="get-property('reason')"/>
+                                    <arg evaluator="xml" expression="get-property('requestId')"/>
+                                    <arg evaluator="xml" expression="get-property('timestamp')"/>
+                                </args>
+                            </payloadFactory>
+                            <property name="HTTP_SC" value="200" scope="axis2"/>
+                            <property name="messageType" value="application/json" scope="axis2"/>
+                            <header name="X-Correlation-ID" expression="get-property('correlationId')" scope="transport"/>
+                            <log level="custom">
+                                <property name="LOG" value="RESPONSE_OUT 200"/>
+                                <property name="correlationId" expression="get-property('correlationId')"/>
+                                <property name="customer" expression="get-property('maskedCustomer')"/>
+                            </log>
+                            <respond/>
+                        </else>
+                    </filter>
+                </then>
+                <else>
+                    <property name="ERR_HTTP" value="400" scope="default" type="STRING"/>
+                    <property name="ERR_CODE" value="INVALID_REQUEST" scope="default" type="STRING"/>
+                    <property name="ERR_MSG" value="customerId, monthlyIncome, requestedAmount and termMonths are required; the last three must be positive whole numbers." scope="default" type="STRING"/>
+                    <sequence key="ErrorResponseSeq"/>
+                </else>
+            </filter>
         </inSequence>
         <faultSequence>
         </faultSequence>

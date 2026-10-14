@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="AccountFaultSeq" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+    <!-- real error stays on the server -->
+    <log level="custom">
+        <property name="LOG" value="DB_FAILURE"/>
+        <property name="correlationId" expression="get-property('correlationId')"/>
+        <property name="account" expression="get-property('maskedAccount')"/>
+        <property name="errorCode" expression="get-property('ERROR_CODE')"/>
+        <property name="detail" expression="get-property('ERROR_MESSAGE')"/>
+    </log>
+    <property name="ERR_HTTP" value="503" scope="default" type="STRING"/>
+    <property name="ERR_CODE" value="DATABASE_UNAVAILABLE" scope="default" type="STRING"/>
+    <property name="ERR_MSG" value="Unable to retrieve account details at this time. Please try again later." scope="default" type="STRING"/>
+    <sequence key="ErrorResponseSeq"/>
+</sequence>

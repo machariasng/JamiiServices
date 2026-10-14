@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="ProxyFaultSeq" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+    <log level="custom">
+        <property name="LOG" value="BACKEND_FAILURE customers"/>
+        <property name="correlationId" expression="get-property('correlationId')"/>
+        <property name="errorCode" expression="get-property('ERROR_CODE')"/>
+        <property name="detail" expression="get-property('ERROR_MESSAGE')"/>
+    </log>
+    <filter source="get-property('ERROR_CODE')" regex="101504|101508">
+        <then>
+            <property name="ERR_HTTP" value="504" scope="default" type="STRING"/>
+            <property name="ERR_CODE" value="BACKEND_TIMEOUT" scope="default" type="STRING"/>
+            <property name="ERR_MSG" value="The customer service did not respond in time." scope="default" type="STRING"/>
+        </then>
+        <else>
+            <property name="ERR_HTTP" value="503" scope="default" type="STRING"/>
+            <property name="ERR_CODE" value="BACKEND_UNAVAILABLE" scope="default" type="STRING"/>
+            <property name="ERR_MSG" value="The customer service is currently unavailable. Please retry." scope="default" type="STRING"/>
+        </else>
+    </filter>
+    <sequence key="ErrorResponseSeq"/>
+</sequence>

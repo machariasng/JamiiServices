@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="LoanFaultSeq" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+    <log level="custom">
+        <property name="LOG" value="LOAN_FAULT"/>
+        <property name="correlationId" expression="get-property('correlationId')"/>
+        <property name="stage" expression="get-property('stage')"/>
+        <property name="errorCode" expression="get-property('ERROR_CODE')"/>
+        <property name="detail" expression="get-property('ERROR_MESSAGE')"/>
+    </log>
+    <filter source="get-property('stage')" regex="INPUT">
+        <then>
+            <property name="ERR_HTTP" value="400" scope="default" type="STRING"/>
+            <property name="ERR_CODE" value="INVALID_REQUEST" scope="default" type="STRING"/>
+            <property name="ERR_MSG" value="Request body is not valid JSON." scope="default" type="STRING"/>
+        </then>
+        <else>
+            <filter source="get-property('ERROR_CODE')" regex="101504|101508">
+                <then>
+                    <property name="ERR_HTTP" value="504" scope="default" type="STRING"/>
+                    <property name="ERR_CODE" value="BACKEND_TIMEOUT" scope="default" type="STRING"/>
+                    <property name="ERR_MSG" value="The eligibility service did not respond in time." scope="default" type="STRING"/>
+                </then>
+                <else>
+                    <property name="ERR_HTTP" value="503" scope="default" type="STRING"/>
+                    <property name="ERR_CODE" value="BACKEND_UNAVAILABLE" scope="default" type="STRING"/>
+                    <property name="ERR_MSG" value="The eligibility service is currently unavailable. Please retry." scope="default" type="STRING"/>
+                </else>
+            </filter>
+        </else>
+    </filter>
+    <sequence key="ErrorResponseSeq"/>
+</sequence>

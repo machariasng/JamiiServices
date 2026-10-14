@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<endpoint name="LoanSoapEP" xmlns="http://ws.apache.org/ns/synapse">
+    <address uri="http://www.dneonline.com/calculator.asmx" format="soap11">
+        <timeout>
+            <duration>8000</duration>
+            <responseAction>fault</responseAction>
+        </timeout>
+        <suspendOnFailure>
+            <initialDuration>5000</initialDuration>
+            <progressionFactor>2.0</progressionFactor>
+            <maximumDuration>30000</maximumDuration>
+        </suspendOnFailure>
+        <markForSuspension>
+            <retriesBeforeSuspension>2</retriesBeforeSuspension>
+        </markForSuspension>
+    </address>
+</endpoint>
