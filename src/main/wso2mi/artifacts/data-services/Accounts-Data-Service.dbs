@@ -2,7 +2,7 @@
     <description/>
     <config id="Accounts-Data-Source">
         <property name="driverClassName">org.sqlite.JDBC</property>
-        <property name="url">jdbc:sqlite:D:/Accounts-Family-Bank.db</property>
+        <property name="url">${configs.accounts_db_url}</property>
         <property name="username">sa</property>
         <property name="password">sa</property>
     </config>
