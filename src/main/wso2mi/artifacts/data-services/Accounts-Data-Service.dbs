@@ -7,7 +7,7 @@
         <property name="password">sa</property>
     </config>
     <query id="getAccountQuery" useConfig="Accounts-Data-Source">
-        <sql>SELECT account_number, status, balance, currency, request_id, timestamp
+        <sql>SELECT account_number, status, balance, currency
             FROM account WHERE account_number = ?</sql>
         <param name="accountNumber" sqlType="STRING"/>
         <result element="Accounts" rowName="Account">
@@ -15,8 +15,6 @@
             <element column="status" name="accountStatus" xsdType="string"/>
             <element column="balance" name="accountBalance" xsdType="integer"/>
             <element column="currency" name="accountCurrency" xsdType="string"/>
-            <element column="request_id" name="requestId" xsdType="string"/>
-            <element column="timestamp" name="timestamp" xsdType="string"/>
         </result>
     </query>
     <resource method="GET" path="accountsds/{accountNumber}" disableStreaming="true">

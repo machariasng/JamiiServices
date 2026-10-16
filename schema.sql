@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS account;
+
+CREATE TABLE account (
+	account_number TEXT NOT NULL,
+	status TEXT NOT NULL,
+	balance INTEGER DEFAULT (0) NOT NULL,
+	currency TEXT DEFAULT ('KES') NOT NULL,
+	CONSTRAINT ACCOUNT_PK PRIMARY KEY (account_number)
+);
