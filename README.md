@@ -24,3 +24,31 @@ Option 2
 
 To publish the services on APIM and test them you will build on maven and create docker images
 
+Step 1
+
+For the three services developed, use the option of create docker image on visual studio. This does the required build using maven, copies the database file and builds a docker image.
+Start the container using below command
+
+docker run -d --name jamiiservices -p 8290:8290 -p 8253:8253 -p 9164:9164 jamiiservices:1.0.0
+
+This will start the container running the services, confirm using below endpoints
+
+http://localhost:8290/apis/accounts/1122334455/balance
+
+http://localhost:8290/apis/customers/1
+
+http://localhost:8290/apis/loans/eligibility
+
+{
+  "customerId": "CUST-100245",
+  "monthlyIncome": 85000,
+  "requestedAmount": 250000,
+  "termMonths": 12
+}
+
+Step 2
+
+To start a docker container running WSO2 APIM and publish the APIs using the handwritten swagger file
+
+
+
